@@ -125,6 +125,13 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
      * @param {Router} router The router.
      */
 
+    /**
+     * Triggered when the router does not find a matching route.
+     * @event router:route:not-found
+     * @param {string} fragment The url fragment.
+     * @param {Router} router The router.
+     */
+
     var createRouter = function() {
         var queue = [],
             isProcessing = ko.observable(false),
@@ -267,6 +274,14 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
             });
         }
 
+        /**
+         * Inspects routes and modules before activation. Can be used to protect access by cancelling navigation or redirecting.
+         * @method guardRoute
+         * @param {object} instance The module instance that is about to be activated by the router.
+         * @param {object} instruction The route instruction. The instruction object has config, fragment, queryString, params and queryParams properties.
+         * @return {Promise|Boolean|String} If a boolean, determines whether or not the route should activate or be cancelled. If a string, causes a redirect to the specified route. Can also be a promise for either of these value types.
+         */
+
         function handleGuardedRoute(activator, instance, instruction) {
             var resultOrPromise = router.guardRoute(instance, instruction);
             if (resultOrPromise) {
@@ -405,8 +420,13 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
         }
 
         function addActiveFlag(config) {
+            if(config.isActive){
+                return;
+            }
+
             config.isActive = ko.computed(function() {
-                return activeItem() && activeItem().__moduleId__ == config.moduleId;
+                var theItem = activeItem();
+                return theItem && theItem.__moduleId__ == config.moduleId;
             });
         }
 
@@ -497,6 +517,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
             }
 
             system.log('Route Not Found');
+            router.trigger('router:route:not-found', fragment, router);
 
             if (currentInstruction) {
                 history.navigate(currentInstruction.fragment, { trigger:false, replace:true });
@@ -740,6 +761,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
         /**
          * Resets the router by removing handlers, routes, event handlers and previously configured options.
          * @method reset
+         * @chainable
          */
         router.reset = function() {
             currentInstruction = currentActivation = undefined;
@@ -747,12 +769,14 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
             router.routes = [];
             router.off();
             delete router.options;
+            return router;
         };
 
         /**
          * Makes all configured routes and/or module ids relative to a certain base url.
          * @method makeRelative
          * @param {string|object} settings If string, the value is used as the base for routes and module ids. If an object, you can specify `route` and `moduleId` separately. In place of specifying route, you can set `fromParent:true` to make routes automatically relative to the parent router's active route.
+         * @chainable
          */
         router.makeRelative = function(settings){
             if(system.isString(settings)){
@@ -774,7 +798,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                 router.relativeToParentRouter = true;
             }
 
-            this.on('router:route:before-config').then(function(config){
+            router.on('router:route:before-config').then(function(config){
                 if(settings.moduleId){
                     config.moduleId = settings.moduleId + config.moduleId;
                 }
@@ -788,7 +812,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                 }
             });
 
-            return this;
+            return router;
         };
 
         /**
